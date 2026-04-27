@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Build foldseek at a git ref (default: master) and install into $CONDA_PREFIX.
+# Usage: scripts/install_foldseek [ref]
+
+set -euo pipefail
+
+REF="${1:-master}"
+REPO_URL="https://github.com/steineggerlab/foldseek.git"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SRC_DIR="${REPO_ROOT}/out/foldseek_src"
+
+if [ -z "${CONDA_PREFIX:-}" ]; then
+    echo "CONDA_PREFIX is not set. Activate the conda env first." >&2
+    exit 1
+fi
+
+if command -v module &>/dev/null; then
+    module load rust || true
+fi
+
+if [ ! -d "${SRC_DIR}/.git" ]; then
+    git clone "${REPO_URL}" "${SRC_DIR}"
+fi
+
+cd "${SRC_DIR}"
+git fetch --tags origin
+git checkout "${REF}"
+git submodule update --init --recursive
+
+mkdir -p build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${CONDA_PREFIX}" "${SRC_DIR}"
+JOBS=$(nproc)
+[ "${JOBS}" -gt 32 ] && JOBS=32
+make -j"${JOBS}"
+make install
+
+echo "Installed foldseek (${REF}) to ${CONDA_PREFIX}/bin/foldseek"
