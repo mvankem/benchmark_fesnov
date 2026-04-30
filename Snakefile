@@ -10,15 +10,21 @@ rule all:
         AFDB50,
 
 rule download_query:
-    output: f"{SMKDIR}/FESNov_families.pdb.tar.gz"
+    output:
+        tgz   = f"{SMKDIR}/FESNov_families.pdb.tar.gz",
+        plddt = f"{SMKDIR}/pLDDT_values.tab",
     shell:
-        "curl -L -o {output} "
-        "  'https://zenodo.org/records/10242439/files/FESNov_families.pdb.tar.gz?download=1'"
+        "curl -L -o {output.tgz} "
+        "  'https://zenodo.org/records/10242439/files/FESNov_families.pdb.tar.gz?download=1' && "
+        "curl -L -o {output.plddt} "
+        "  'https://zenodo.org/records/10242439/files/pLDDT_values.tab?download=1'"
 
 rule subset_query:
-    input:  f"{SMKDIR}/FESNov_families.pdb.tar.gz"
+    input:
+        tgz   = f"{SMKDIR}/FESNov_families.pdb.tar.gz",
+        plddt = f"{SMKDIR}/pLDDT_values.tab",
     output: f"{SMKDIR}/FESNov_families.pdb.sub2000.tar.gz"
-    shell:  "python scripts/make_subset_tar.py {input} {output}"
+    shell:  "python scripts/make_subset_tar.py {input.tgz} {input.plddt} {output}"
 
 rule createdb_query:
     input:  f"{SMKDIR}/FESNov_families.pdb.tar.gz"
