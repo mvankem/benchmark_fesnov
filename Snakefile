@@ -1,55 +1,57 @@
-# FESNov protein-structure search benchmark.
-#
-# Workflow:
-#   snakemake out/smk/results/<label>.tsv --cores N    # one per install
-#   snakemake comparison_plot.png --cores N            # plot all results
-#
-# By default looks for `foldseek` on $PATH. Override the path with:
-#   --config foldseek=/path/to/foldseek
-
-import glob
-
-OUTDIR   = "out/smk"
-DATA_URL = "https://zenodo.org/records/10242439/files/FESNov_families.pdb.tar.gz"
-FOLDSEEK = config.get("foldseek", "foldseek")
-
-DATA_TGZ = f"{OUTDIR}/data/FESNov_families.pdb.tar.gz"
-DATA_DIR = f"{OUTDIR}/data/FESNov_families.pdb"
-RESULTS  = f"{OUTDIR}/results"
-PLOT     = f"{OUTDIR}/comparison_plot.png"
-
-wildcard_constraints:
-    label = r"[A-Za-z0-9_.\-]+"
+OUTDIR = "out"
+SMKDIR = f"{OUTDIR}/smk"
+#AFDB50 = f"{SMKDIR}/afdb50"
+AFDB50 = "/cbscratch/michel/prefilter_benchmark2/martin_db/tDB"
 
 rule all:
-    input: PLOT
+    input:
+        f"{SMKDIR}/qDB_all",
+        f"{SMKDIR}/qDB_sub2000",
+        AFDB50,
 
-rule download_dataset:
-    output: DATA_TGZ
+rule download_query:
+    output: f"{SMKDIR}/FESNov_families.pdb.tar.gz"
     shell:
-        "mkdir -p $(dirname {output}) && "
-        "curl -L -o {output} {DATA_URL!r}"
+        "curl -L -o {output} "
+        "  'https://zenodo.org/records/10242439/files/FESNov_families.pdb.tar.gz?download=1'"
 
-rule extract_dataset:
-    input:  DATA_TGZ
-    output: directory(DATA_DIR)
+rule subset_query:
+    input:  f"{SMKDIR}/FESNov_families.pdb.tar.gz"
+    output: f"{SMKDIR}/FESNov_families.pdb.sub2000.tar.gz"
+    shell:  "python scripts/make_subset_tar.py {input} {output}"
+
+rule createdb_query:
+    input:  f"{SMKDIR}/FESNov_families.pdb.tar.gz"
+    output: f"{SMKDIR}/qDB_all"
+    shell:  "foldseek createdb {input} {output}"
+
+rule createdb_query_subset:
+    input:  f"{SMKDIR}/FESNov_families.pdb.sub2000.tar.gz"
+    output: f"{SMKDIR}/qDB_sub2000"
+    shell:  "foldseek createdb {input} {output}"
+
+rule download_target:
+    output: AFDB50
+    shell:  f"foldseek databases Alphafold/UniProt50 {{output}} {SMKDIR}/tmp"
+
+rule search_foldseek1:
+    input:
+        qdb = f"{SMKDIR}/qDB_{{tag}}",
+        tdb = AFDB50,
+    output: f"{SMKDIR}/search_foldseek1_{{tag}}.tsv"
+    threads: 32
     shell:
-        "mkdir -p {output} && "
-        "tar -xzf {input} -C $(dirname {output})"
-
-rule search:
-    input:  DATA_DIR
-    output: f"{RESULTS}/{{label}}.tsv"
-    threads: 8
-    shell:
-        "tmp=$(mktemp -d) && "
-        "{FOLDSEEK} easy-search "
-        "  {input} {input} {output} $tmp "
-        "  --threads {threads} "
-        "  --format-output query,target,evalue,bits && "
-        "rm -rf $tmp"
-
-rule comparison_plot:
-    input:  lambda wc: sorted(glob.glob(f"{RESULTS}/*.tsv"))
-    output: PLOT
-    shell:  "python scripts/plot.py --output {output} {input}"
+        """
+        mkdir -p {output}_tmp
+        foldseek prefilter {input.qdb}_ss {input.tdb}_ss {output}_tmp/prefDB \
+            -s 9.5 -k 6 --max-seqs 2000 --comp-bias-corr 1 --comp-bias-corr-scale 0.15 \
+            --mask-lower-case 0 --aux-score 0 --threads {threads}
+        foldseek structurealign {input.qdb} {input.tdb} {output}_tmp/prefDB {output}_tmp/alnDB \
+            -e 10 --sort-by-structure-bits 0 --ss-12st 0 -a --threads {threads}
+        # TODO: reindex a query db with the full structure based on {input.qdb} -> querydb_ca
+        # and use this in convertalis to calculate gscores
+        foldseek convertalis {input.qdb} {input.tdb} {output}_tmp/alnDB {output} \
+            --format-output 'query,target,evalue,bits,qstart,tstart,cigar,gscore' \
+            --threads {threads}
+        rm -rf {output}_tmp
+        """

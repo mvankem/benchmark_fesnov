@@ -5,10 +5,12 @@ Benchmark protein-structure search methods on the FESNov families dataset
 
 ## Reproduce
 
-1. Install conda (once).
-2. Create + activate the env:
+1. Create conda env (once).
    ```
    conda env create -f envs/env.yaml
+   ```
+2. Activate the env:
+   ```
    conda activate benchmark-fesnov
    ```
 3. By default the pipeline looks for `foldseek` on `$PATH`. Override the
@@ -27,12 +29,7 @@ Benchmark protein-structure search methods on the FESNov families dataset
    snakemake comparison_plot.png --cores 1
    ```
 
-## Layout
+## Notes
 
-```
-Snakefile           pipeline (config inline; OUTDIR=./out/smk)
-envs/env.yaml       conda env (snakemake + matplotlib)
-scripts/
-  install_foldseek  builds foldseek at a git ref into $CONDA_PREFIX
-  plot.py           placeholder comparison plot
-```
+snakemake --cores 32 out/smk/search_foldseek1_sub2000.tsv
+awk '!seen[$1]++' out/smk/search_foldseek1_sub2000.tsv | awk '$3 < 0.001' | wc -l

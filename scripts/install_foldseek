@@ -5,7 +5,7 @@
 set -euo pipefail
 
 REF="${1:-master}"
-REPO_URL="https://github.com/steineggerlab/foldseek.git"
+REPO_URL="https://github.com/mvankem/foldseek.git"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC_DIR="${REPO_ROOT}/out/foldseek_src"
 
