@@ -36,9 +36,3 @@ scripts/
   install_foldseek  builds foldseek at a git ref into $CONDA_PREFIX
   plot.py           placeholder comparison plot
 ```
-
-## Requirements
-
-`install_foldseek` calls system `cmake`, `git`, and a C++ compiler. On HPC
-systems with `module`, it runs `module load rust`. Anything else needed for
-the foldseek build must be available in the environment already.

@@ -23,8 +23,14 @@ if [ ! -d "${SRC_DIR}/.git" ]; then
 fi
 
 cd "${SRC_DIR}"
-git fetch --tags origin
-git checkout "${REF}"
+git fetch --tags --prune origin
+# Prefer origin/<ref> so branch refs always pick up new commits;
+# fall back to <ref> for tags and commit hashes.
+if git rev-parse --verify --quiet "origin/${REF}" >/dev/null; then
+    git checkout --detach "origin/${REF}"
+else
+    git checkout --detach "${REF}"
+fi
 git submodule update --init --recursive
 
 mkdir -p build
