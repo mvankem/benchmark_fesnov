@@ -13,7 +13,12 @@ Benchmark protein-structure search methods on the FESNov families dataset
    ```
    conda activate benchmark-fesnov
    ```
-3. By default the pipeline looks for `foldseek` on `$PATH`. Override the
+3. (optional) All data is written under `out/` (downloads, databases, search results;
+   tens to hundreds of GB). To put it elsewhere, symlink before running:
+   ```
+   ln -s /scratch/$USER/fesnov out
+   ```
+4. By default the pipeline looks for `foldseek` on `$PATH`. Override the
    path with `--config foldseek=/path/to/foldseek` on the snakemake
    commands below. To install one into the active conda env (no
    system-wide changes), use:
@@ -33,3 +38,9 @@ Benchmark protein-structure search methods on the FESNov families dataset
 
 snakemake --cores 32 out/smk/search_foldseek1_sub2000.tsv
 awk '!seen[$1]++' out/smk/search_foldseek1_sub2000.tsv | awk '$3 < 0.001' | wc -l
+
+<!-- TMP (remove before final): instead of the createdb masking hack
+(--mask-bfactor-threshold 50) we drive gscore via foldseek, we could
+emit the per-hit pdbs via --format-output and compute gscore ourselves
+from CA coords + the alignment. -->
+
