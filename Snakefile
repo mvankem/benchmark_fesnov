@@ -39,7 +39,10 @@ rule createdb_query_subset:
 
 rule download_target:
     output: AFDB50
-    shell:  f"foldseek databases Alphafold/UniProt50 {{output}} {SMKDIR}/tmp"
+    threads: 32
+    shell:
+        f"foldseek databases Alphafold/UniProt50 {{output}} {SMKDIR}/tmp && "
+        "foldseek add12st --threads {threads} {output}"
 
 rule search_foldseek1:
     input:
