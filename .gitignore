@@ -1,5 +1,7 @@
 out/
 out
+*.err
+*.out
 .snakemake/
 __pycache__/
 *.pyc
