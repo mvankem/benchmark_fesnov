@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -c 32
-#SBATCH --mem=200G
+#SBATCH --mem=256G
 #SBATCH --time=08:00:00
 #SBATCH --job-name=fesnov
 #SBATCH -o run.out

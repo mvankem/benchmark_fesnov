@@ -66,15 +66,58 @@ rule search_foldseek1:
         rm -rf {output}_tmp
         """
 
+rule search_foldseek2_pred:
+    input:
+        pred_qdb = f"{OUTDIR}/pred_db/{{name}}/db",
+        gt_qdb   = f"{SMKDIR}/qDB_{{tag}}",
+        tdb      = AFDB50,
+    output: f"{SMKDIR}/search_foldseek2_{{tag}}_pred_{{name}}.tsv"
+    threads: 32
+    shell:
+        """
+        mkdir -p {output}_tmp
+        python scripts/compare_dbs.py reindex \
+            {input.pred_qdb} {input.gt_qdb} {output}_tmp/gtReidx
+        foldseek prefilter {input.pred_qdb}_ss {input.tdb}_ss {output}_tmp/prefDB \
+            -s 9.5 -k 6 --max-seqs 2000 --comp-bias-corr 1 --comp-bias-corr-scale 0.15 \
+            --mask-lower-case 0 --aux-score 1 --threads {threads}
+        # pred-side alignment + tsv (gives the ranking / top hit per query)
+        foldseek structurealign {input.pred_qdb} {input.tdb} {output}_tmp/prefDB {output}_tmp/predAlnDB \
+            -e 10 --sort-by-structure-bits 0 --ss-12st 1 \
+            --use-reverse-score 0 \
+            --gap-open aa:14,nucl:14 --gap-extend aa:2,nucl:2 \
+            -a --threads {threads}
+        # pred has no _ca, so we cannot compute gscore here; only need query/target for the merge.
+        foldseek convertalis {input.pred_qdb} {input.tdb} {output}_tmp/predAlnDB {output}_tmp/pred.tsv \
+            --format-output 'query,target,bits' \
+            --threads {threads}
+        # GT-side alignment + tsv (gives the per-pair score on ground-truth coords).
+        # -e 10000 so pred's top target is rarely filtered out before the merge.
+        foldseek structurealign {output}_tmp/gtReidx {input.tdb} {output}_tmp/prefDB {output}_tmp/gtAlnDB \
+            -e 10000 --sort-by-structure-bits 0 --ss-12st 1 \
+            --use-reverse-score 0 \
+            --gap-open aa:14,nucl:14 --gap-extend aa:2,nucl:2 \
+            -a --threads {threads}
+        foldseek convertalis {output}_tmp/gtReidx {input.tdb} {output}_tmp/gtAlnDB {output}_tmp/gt.tsv \
+            --format-output 'query,target,evalue,bits,qstart,tstart,cigar,gscore' \
+            --threads {threads}
+        # For each query take the GT row whose target matches pred's top target.
+        awk -F'\\t' 'NR==FNR{{if(!seen[$1]++) top[$1]=$2; next}} ($1 in top) && top[$1]==$2' \
+            {output}_tmp/pred.tsv {output}_tmp/gt.tsv > {output}
+        rm -rf {output}_tmp
+        """
+
 rule plot_gscore_firsthit:
     input:
-        fs1 = f"{SMKDIR}/search_foldseek1_{{tag}}.tsv",
-        fs2 = f"{SMKDIR}/search_foldseek2_{{tag}}.tsv",
-        qdb = f"{SMKDIR}/qDB_{{tag}}",
+        fs1  = f"{SMKDIR}/search_foldseek1_{{tag}}.tsv",
+        fs2  = f"{SMKDIR}/search_foldseek2_{{tag}}.tsv",
+        pred = f"{SMKDIR}/search_foldseek2_{{tag}}_pred_mprost12B.tsv",
+        qdb  = f"{SMKDIR}/qDB_{{tag}}",
     output: f"{SMKDIR}/plot_gscore_firsthit_{{tag}}.png"
     shell:
         "python scripts/plot_gscore_firsthit.py "
-        "--queries {input.qdb}.lookup {output} {input.fs1} {input.fs2}"
+        "--queries {input.qdb}.lookup {output} "
+        "{input.fs1} {input.fs2} {input.pred}"
 
 rule search_foldseek2:
     input:

@@ -56,12 +56,13 @@ def main() -> None:
     fig, ax = plt.subplots(figsize=(7, 4))
     for p in args.inputs:
         hits = first_hit_gscores(p)
-        vals = sorted(hits.get(q, 0.0) for q in queries)
-        ys = list(range(1, n + 1))
-        ax.plot(vals, ys, label=label_for(p))
-    ax.set_xlabel("gscore of top hit")
-    ax.set_ylabel("number of queries")
+        vals = sorted((hits.get(q, 0.0) for q in queries), reverse=True)
+        xs = [(i + 1) / n for i in range(n)]
+        ax.plot(xs, vals, label=label_for(p))
+    ax.set_xlabel("fraction of queries")
+    ax.set_ylabel("gscore of top hit")
     ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
     ax.legend()
     fig.tight_layout()
     fig.savefig(args.output, dpi=150)
