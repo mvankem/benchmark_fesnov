@@ -57,7 +57,7 @@ rule search_foldseek1:
             -s 9.5 -k 6 --max-seqs 2000 --comp-bias-corr 1 --comp-bias-corr-scale 0.15 \
             --mask-lower-case 0 --aux-score 0 --threads {threads}
         foldseek structurealign {input.qdb} {input.tdb} {output}_tmp/prefDB {output}_tmp/alnDB \
-            -e 10 --sort-by-structure-bits 0 --ss-12st 0 -a --threads {threads}
+            -e 10000 --sort-by-structure-bits 0 --ss-12st 0 -a --threads {threads}
         # TODO: reindex a query db with the full structure based on {input.qdb} -> querydb_ca
         # and use this in convertalis to calculate gscores
         foldseek convertalis {input.qdb} {input.tdb} {output}_tmp/alnDB {output} \
@@ -83,7 +83,7 @@ rule search_foldseek2_pred:
             --mask-lower-case 0 --aux-score 1 --threads {threads}
         # pred-side alignment + tsv (gives the ranking / top hit per query)
         foldseek structurealign {input.pred_qdb} {input.tdb} {output}_tmp/prefDB {output}_tmp/predAlnDB \
-            -e 10 --sort-by-structure-bits 0 --ss-12st 1 \
+            -e 10000 --sort-by-structure-bits 0 --ss-12st 1 \
             --use-reverse-score 0 \
             --gap-open aa:14,nucl:14 --gap-extend aa:2,nucl:2 \
             -a --threads {threads}
@@ -132,7 +132,7 @@ rule search_foldseek2:
             -s 9.5 -k 6 --max-seqs 2000 --comp-bias-corr 1 --comp-bias-corr-scale 0.15 \
             --mask-lower-case 0 --aux-score 1 --threads {threads}
         foldseek structurealign {input.qdb} {input.tdb} {output}_tmp/prefDB {output}_tmp/alnDB \
-            -e 10 --sort-by-structure-bits 0 --ss-12st 1 \
+            -e 10000 --sort-by-structure-bits 0 --ss-12st 1 \
             --use-reverse-score 0 \
             --gap-open aa:14,nucl:14 --gap-extend aa:2,nucl:2 \
             -a --threads {threads}
