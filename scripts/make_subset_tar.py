@@ -10,13 +10,13 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-N = 2000
 SEED = 42
 PLDDT_MIN = 70
 
 input_path  = sys.argv[1]
 plddt_path  = sys.argv[2]
 output_path = sys.argv[3]
+N           = int(sys.argv[4])
 
 plddt = {}
 with open(plddt_path) as f:

@@ -186,6 +186,79 @@ def reindex(args):
     print("Done.")
 
 
+def load_lookup(path):
+    """Load a .lookup file (numeric_id<TAB>name<TAB>file_idx) into name -> numeric_id."""
+    out = {}
+    with open(path) as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 2:
+                continue
+            out[parts[1]] = int(parts[0])
+    return out
+
+
+def build_prefdb(args):
+    """Build a single-shard prefDB from a 2-col tsv (qname<TAB>tname).
+    Only the target-id column matters to structurealign; score/diag are placeholders.
+    """
+    qmap = load_lookup(args.qdb + ".lookup")
+
+    # Collect needed target names from tsv, plus first-hit per query.
+    first_hit = {}  # qname -> tname (first occurrence only)
+    need_t = set()
+    with open(args.tsv) as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 2:
+                continue
+            q, t = parts[0], parts[1]
+            if q in first_hit:
+                continue
+            first_hit[q] = t
+            need_t.add(t)
+
+    # Stream tdb.lookup for only the names we need.
+    tmap = {}
+    with open(args.tdb + ".lookup") as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 2:
+                continue
+            if parts[1] in need_t:
+                tmap[parts[1]] = int(parts[0])
+                if len(tmap) == len(need_t):
+                    break
+    missing_t = need_t - set(tmap)
+    if missing_t:
+        ex = next(iter(missing_t))
+        print(f"Error: {len(missing_t)} target names not in {args.tdb}.lookup (e.g. {ex!r})", file=sys.stderr)
+        sys.exit(1)
+
+    # Build (qid, record_bytes) sorted by qid, write data + index.
+    # Query names not in qdb are silently skipped: e.g. when the search ran
+    # over the full pred db but qdb is a subset for quicker testing.
+    records = []
+    skipped_q = 0
+    for qname, tname in first_hit.items():
+        if qname not in qmap:
+            skipped_q += 1
+            continue
+        rec = f"{tmap[tname]}\t255\t0\n\0".encode()
+        records.append((qmap[qname], rec))
+    records.sort(key=lambda x: x[0])
+
+    with open(args.out, "wb") as f_data, open(args.out + ".index", "w") as f_idx:
+        offset = 0
+        for qid, rec in records:
+            f_data.write(rec)
+            f_idx.write(f"{qid}\t{offset}\t{len(rec)}\n")
+            offset += len(rec)
+    with open(args.out + ".dbtype", "wb") as f:
+        f.write(b"\x07\x00\x00\x00")  # PREFILTER_RES
+    print(f"Wrote prefDB with {len(records)} queries to {args.out} (skipped {skipped_q} queries not in qdb)")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Database utilities")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -200,6 +273,13 @@ def main():
     p_reindex.add_argument("db", help="Source database (data to reindex)")
     p_reindex.add_argument("db_out", help="Output database path (symlinks to db, new index)")
     p_reindex.set_defaults(func=reindex)
+
+    p_build = subparsers.add_parser("build_prefdb", help="Build a prefDB from a 2-col tsv (qname<TAB>tname)")
+    p_build.add_argument("tsv", help="Input tsv with qname<TAB>tname; first row per qname is used")
+    p_build.add_argument("qdb", help="Query db (its .lookup maps qname -> numeric id)")
+    p_build.add_argument("tdb", help="Target db (its .lookup maps tname -> numeric id)")
+    p_build.add_argument("out", help="Output prefDB path (writes <out>, <out>.index, <out>.dbtype)")
+    p_build.set_defaults(func=build_prefdb)
 
     args = parser.parse_args()
     args.func(args)
