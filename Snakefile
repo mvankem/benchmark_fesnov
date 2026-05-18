@@ -1,7 +1,6 @@
 OUTDIR = "out"
 SMKDIR = f"{OUTDIR}/smk"
 AFDB50 = f"{SMKDIR}/afdb50"
-#AFDB50 = "/cbscratch/michel/prefilter_benchmark2/martin_db/tDB"
 
 # Query subset size. Override with `snakemake --config sub=2` for quick testing.
 SUB = int(config.get("sub", 2000))
