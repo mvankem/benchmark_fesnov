@@ -2,6 +2,9 @@ OUTDIR = "out"
 SMKDIR = f"{OUTDIR}/smk"
 AFDB50 = f"{SMKDIR}/afdb50"
 
+# Foldseek binary. Override with `snakemake --config foldseek=/path/to/foldseek`.
+FOLDSEEK = config.get("foldseek", "foldseek")
+
 # Query subset size. Override with `snakemake --config sub=2` for quick testing.
 SUB = int(config.get("sub", 2000))
 TAG = f"sub{SUB}"
@@ -33,19 +36,19 @@ rule subset_query:
 rule createdb_query:
     input:  f"{SMKDIR}/FESNov_families.pdb.tar.gz"
     output: f"{SMKDIR}/qDB_all"
-    shell:  "foldseek createdb --ss-12st 1 --mask-bfactor-threshold 50 {input} {output}"
+    shell:  f"{FOLDSEEK} createdb --ss-12st 1 --mask-bfactor-threshold 50 {{input}} {{output}}"
 
 rule createdb_query_subset:
     input:  f"{SMKDIR}/FESNov_families.pdb.{TAG}.tar.gz"
     output: f"{SMKDIR}/qDB_{TAG}"
-    shell:  "foldseek createdb --ss-12st 1 --mask-bfactor-threshold 50 {input} {output}"
+    shell:  f"{FOLDSEEK} createdb --ss-12st 1 --mask-bfactor-threshold 50 {{input}} {{output}}"
 
 rule download_target:
     output: AFDB50
     threads: 32
     shell:
-        f"foldseek databases Alphafold/UniProt50 {{output}} {SMKDIR}/tmp && "
-        "foldseek add12st --threads {threads} {output}"
+        f"{FOLDSEEK} databases Alphafold/UniProt50 {{output}} {SMKDIR}/tmp && "
+        f"{FOLDSEEK} add12st --threads {{threads}} {{output}}"
 
 rule search_foldseek1:
     input:
@@ -54,17 +57,17 @@ rule search_foldseek1:
     output: f"{SMKDIR}/search_foldseek1_{TAG}.tsv"
     threads: 32
     shell:
-        """
-        mkdir -p {output}_tmp
-        foldseek prefilter {input.qdb}_ss {input.tdb}_ss {output}_tmp/prefDB \
+        f"""
+        mkdir -p {{output}}_tmp
+        {FOLDSEEK} prefilter {{input.qdb}}_ss {{input.tdb}}_ss {{output}}_tmp/prefDB \
             -s 9.5 -k 6 --max-seqs 2000 --comp-bias-corr 1 --comp-bias-corr-scale 0.15 \
-            --mask-lower-case 0 --aux-score 0 --threads {threads}
-        foldseek structurealign {input.qdb} {input.tdb} {output}_tmp/prefDB {output}_tmp/alnDB \
-            -e 10000 --sort-by-structure-bits 0 --ss-12st 0 -a --threads {threads}
-        foldseek convertalis {input.qdb} {input.tdb} {output}_tmp/alnDB {output}_tmp/full.tsv \
-            --format-output 'query,target' --threads {threads}
-        awk -F'\\t' '!seen[$1]++' {output}_tmp/full.tsv > {output}
-        rm -rf {output}_tmp
+            --mask-lower-case 0 --aux-score 0 --threads {{threads}}
+        {FOLDSEEK} structurealign {{input.qdb}} {{input.tdb}} {{output}}_tmp/prefDB {{output}}_tmp/alnDB \
+            -e 10000 --sort-by-structure-bits 0 --ss-12st 0 -a --threads {{threads}}
+        {FOLDSEEK} convertalis {{input.qdb}} {{input.tdb}} {{output}}_tmp/alnDB {{output}}_tmp/full.tsv \
+            --format-output 'query,target' --threads {{threads}}
+        awk -F'\\t' '!seen[$1]++' {{output}}_tmp/full.tsv > {{output}}
+        rm -rf {{output}}_tmp
         """
 
 rule search_foldseek2:
@@ -74,20 +77,20 @@ rule search_foldseek2:
     output: f"{SMKDIR}/search_foldseek2_{TAG}.tsv"
     threads: 32
     shell:
-        """
-        mkdir -p {output}_tmp
-        foldseek prefilter {input.qdb}_ss {input.tdb}_ss {output}_tmp/prefDB \
+        f"""
+        mkdir -p {{output}}_tmp
+        {FOLDSEEK} prefilter {{input.qdb}}_ss {{input.tdb}}_ss {{output}}_tmp/prefDB \
             -s 9.5 -k 6 --max-seqs 2000 --comp-bias-corr 1 --comp-bias-corr-scale 0.15 \
-            --mask-lower-case 0 --aux-score 1 --threads {threads}
-        foldseek structurealign {input.qdb} {input.tdb} {output}_tmp/prefDB {output}_tmp/alnDB \
+            --mask-lower-case 0 --aux-score 1 --threads {{threads}}
+        {FOLDSEEK} structurealign {{input.qdb}} {{input.tdb}} {{output}}_tmp/prefDB {{output}}_tmp/alnDB \
             -e 10000 --sort-by-structure-bits 0 --ss-12st 1 \
             --use-reverse-score 0 \
             --gap-open aa:14,nucl:14 --gap-extend aa:2,nucl:2 \
-            -a --threads {threads}
-        foldseek convertalis {input.qdb} {input.tdb} {output}_tmp/alnDB {output}_tmp/full.tsv \
-            --format-output 'query,target' --threads {threads}
-        awk -F'\\t' '!seen[$1]++' {output}_tmp/full.tsv > {output}
-        rm -rf {output}_tmp
+            -a --threads {{threads}}
+        {FOLDSEEK} convertalis {{input.qdb}} {{input.tdb}} {{output}}_tmp/alnDB {{output}}_tmp/full.tsv \
+            --format-output 'query,target' --threads {{threads}}
+        awk -F'\\t' '!seen[$1]++' {{output}}_tmp/full.tsv > {{output}}
+        rm -rf {{output}}_tmp
         """
 
 rule search_foldseek2_pred:
@@ -97,20 +100,20 @@ rule search_foldseek2_pred:
     output: f"{SMKDIR}/search_foldseek2_{TAG}_pred_{{name}}.tsv"
     threads: 32
     shell:
-        """
-        mkdir -p {output}_tmp
-        foldseek prefilter {input.pred_qdb}_ss {input.tdb}_ss {output}_tmp/prefDB \
+        f"""
+        mkdir -p {{output}}_tmp
+        {FOLDSEEK} prefilter {{input.pred_qdb}}_ss {{input.tdb}}_ss {{output}}_tmp/prefDB \
             -s 9.5 -k 6 --max-seqs 2000 --comp-bias-corr 1 --comp-bias-corr-scale 0.15 \
-            --mask-lower-case 0 --aux-score 1 --threads {threads}
-        foldseek structurealign {input.pred_qdb} {input.tdb} {output}_tmp/prefDB {output}_tmp/alnDB \
+            --mask-lower-case 0 --aux-score 1 --threads {{threads}}
+        {FOLDSEEK} structurealign {{input.pred_qdb}} {{input.tdb}} {{output}}_tmp/prefDB {{output}}_tmp/alnDB \
             -e 10000 --sort-by-structure-bits 0 --ss-12st 1 \
             --use-reverse-score 0 \
             --gap-open aa:14,nucl:14 --gap-extend aa:2,nucl:2 \
-            -a --threads {threads}
-        foldseek convertalis {input.pred_qdb} {input.tdb} {output}_tmp/alnDB {output}_tmp/full.tsv \
-            --format-output 'query,target' --threads {threads}
-        awk -F'\\t' '!seen[$1]++' {output}_tmp/full.tsv > {output}
-        rm -rf {output}_tmp
+            -a --threads {{threads}}
+        {FOLDSEEK} convertalis {{input.pred_qdb}} {{input.tdb}} {{output}}_tmp/alnDB {{output}}_tmp/full.tsv \
+            --format-output 'query,target' --threads {{threads}}
+        awk -F'\\t' '!seen[$1]++' {{output}}_tmp/full.tsv > {{output}}
+        rm -rf {{output}}_tmp
         """
 
 # Unified gscore step: rebuild a prefDB keyed to qDB_{TAG} numeric IDs from the
@@ -124,19 +127,19 @@ rule gscore_tophit:
     output: f"{SMKDIR}/gscore_{{stem}}.tsv"
     threads: 32
     shell:
-        """
-        mkdir -p {output}_tmp
+        f"""
+        mkdir -p {{output}}_tmp
         python scripts/compare_dbs.py build_prefdb \
-            {input.tsv} {input.qdb} {input.tdb} {output}_tmp/prefDB
-        foldseek structurealign {input.qdb} {input.tdb} {output}_tmp/prefDB {output}_tmp/alnDB \
+            {{input.tsv}} {{input.qdb}} {{input.tdb}} {{output}}_tmp/prefDB
+        {FOLDSEEK} structurealign {{input.qdb}} {{input.tdb}} {{output}}_tmp/prefDB {{output}}_tmp/alnDB \
             -e 10000 --sort-by-structure-bits 0 --ss-12st 1 \
             --use-reverse-score 0 \
             --gap-open aa:14,nucl:14 --gap-extend aa:2,nucl:2 \
-            -a --threads {threads}
-        foldseek convertalis {input.qdb} {input.tdb} {output}_tmp/alnDB {output} \
+            -a --threads {{threads}}
+        {FOLDSEEK} convertalis {{input.qdb}} {{input.tdb}} {{output}}_tmp/alnDB {{output}} \
             --format-output 'query,target,evalue,bits,qstart,tstart,cigar,gscore' \
-            --threads {threads}
-        rm -rf {output}_tmp
+            --threads {{threads}}
+        rm -rf {{output}}_tmp
         """
 
 rule plot_gscore_firsthit:
