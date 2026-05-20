@@ -142,6 +142,31 @@ rule gscore_tophit:
         rm -rf {{output}}_tmp
         """
 
+# Like gscore_tophit, but computes the Foldseek1-style evalue
+# (structurealign with --ss-12st 0, default gap params, no reverse-score).
+# Note: evalues are always computed against the ground-truth qDB_{TAG}
+# sequences, regardless of which {stem} produced the top hits.
+rule evalue_fs1_tophit:
+    input:
+        tsv = f"{SMKDIR}/search_{{stem}}.tsv",
+        qdb = f"{SMKDIR}/qDB_{TAG}",
+        tdb = AFDB50,
+    output: f"{SMKDIR}/evalue_{{stem}}.tsv"
+    threads: 32
+    shell:
+        f"""
+        mkdir -p {{output}}_tmp
+        python scripts/compare_dbs.py build_prefdb \
+            {{input.tsv}} {{input.qdb}} {{input.tdb}} {{output}}_tmp/prefDB
+        {FOLDSEEK} structurealign {{input.qdb}} {{input.tdb}} {{output}}_tmp/prefDB {{output}}_tmp/alnDB \
+            -e 10000 --sort-by-structure-bits 0 --ss-12st 0 \
+            -a --threads {{threads}}
+        {FOLDSEEK} convertalis {{input.qdb}} {{input.tdb}} {{output}}_tmp/alnDB {{output}} \
+            --format-output 'query,target,evalue,bits,qstart,tstart,cigar' \
+            --threads {{threads}}
+        rm -rf {{output}}_tmp
+        """
+
 rule plot_gscore_firsthit:
     input:
         fs1  = f"{SMKDIR}/gscore_foldseek1_{TAG}.tsv",
@@ -153,3 +178,19 @@ rule plot_gscore_firsthit:
         "python scripts/plot_gscore_firsthit.py "
         "--queries {input.qdb}.lookup {output} "
         "{input.fs1} {input.fs2} {input.pred}"
+
+rule print_evalue_firsthit:
+    input:
+        fs1  = f"{SMKDIR}/evalue_foldseek1_{TAG}.tsv",
+        fs2  = f"{SMKDIR}/evalue_foldseek2_{TAG}.tsv",
+        pred = f"{SMKDIR}/evalue_foldseek2_{TAG}_pred_mprost12B.tsv",
+        qdb  = f"{SMKDIR}/qDB_{TAG}",
+    output: f"{SMKDIR}/evalue_firsthit_fractions_{TAG}.txt"
+    shell:
+        r"""
+        N=$(wc -l < {input.qdb}.lookup)
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs1} >  {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs2} >> {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.pred} >> {output}
+        cat {output}
+        """
