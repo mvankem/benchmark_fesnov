@@ -35,6 +35,7 @@ snakemake --cores 32 out/smk/search_foldseek1_sub2000.tsv
 awk '!seen[$1]++' out/smk/search_foldseek1_sub2000.tsv | awk '$3 < 0.001' | wc -l
 
 sbatch -p soeding run.sbatch out/smk/plot_gscore_firsthit_sub2000.png
+sbatch -p soeding run.sbatch --config sub=2
 
 <!-- TMP (remove before final): instead of the createdb masking hack
 (--mask-bfactor-threshold 50) we drive gscore via foldseek, we could

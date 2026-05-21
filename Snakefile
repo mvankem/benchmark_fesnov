@@ -70,6 +70,26 @@ rule search_foldseek1:
         rm -rf {{output}}_tmp
         """
 
+rule search_foldseek1_pred:
+    input:
+        pred_qdb = f"{OUTDIR}/pred_db/{{name}}/db",
+        tdb      = AFDB50,
+    output: f"{SMKDIR}/search_foldseek1_{TAG}_pred_{{name}}.tsv"
+    threads: 32
+    shell:
+        f"""
+        mkdir -p {{output}}_tmp
+        {FOLDSEEK} prefilter {{input.pred_qdb}}_ss {{input.tdb}}_ss {{output}}_tmp/prefDB \
+            -s 9.5 -k 6 --max-seqs 2000 --comp-bias-corr 1 --comp-bias-corr-scale 0.15 \
+            --mask-lower-case 0 --aux-score 0 --threads {{threads}}
+        {FOLDSEEK} structurealign {{input.pred_qdb}} {{input.tdb}} {{output}}_tmp/prefDB {{output}}_tmp/alnDB \
+            -e 10000 --sort-by-structure-bits 0 --ss-12st 0 -a --threads {{threads}}
+        {FOLDSEEK} convertalis {{input.pred_qdb}} {{input.tdb}} {{output}}_tmp/alnDB {{output}}_tmp/full.tsv \
+            --format-output 'query,target' --threads {{threads}}
+        awk -F'\\t' '!seen[$1]++' {{output}}_tmp/full.tsv > {{output}}
+        rm -rf {{output}}_tmp
+        """
+
 rule search_foldseek2:
     input:
         qdb = f"{SMKDIR}/qDB_{TAG}",
@@ -114,6 +134,23 @@ rule search_foldseek2_pred:
             --format-output 'query,target' --threads {{threads}}
         awk -F'\\t' '!seen[$1]++' {{output}}_tmp/full.tsv > {{output}}
         rm -rf {{output}}_tmp
+        """
+
+rule search_mmseqs:
+    input:
+        qdb = f"{SMKDIR}/qDB_{TAG}",
+        tdb = AFDB50,
+    output: f"{SMKDIR}/search_mmseqs_{TAG}.tsv"
+    threads: 32
+    shell:
+        r"""
+        mkdir -p {output}_tmp
+        mmseqs search {input.qdb} {input.tdb} {output}_tmp/resDB {output}_tmp/wd \
+            -a -s 7.5 -e 10000 --max-seqs 2000 --threads {threads}
+        mmseqs convertalis {input.qdb} {input.tdb} {output}_tmp/resDB {output}_tmp/full.tsv \
+            --format-output 'query,target' --threads {threads}
+        awk -F'\t' '!seen[$1]++' {output}_tmp/full.tsv > {output}
+        rm -rf {output}_tmp
         """
 
 # Unified gscore step: rebuild a prefDB keyed to qDB_{TAG} numeric IDs from the
@@ -169,28 +206,34 @@ rule evalue_fs1_tophit:
 
 rule plot_gscore_firsthit:
     input:
-        fs1  = f"{SMKDIR}/gscore_foldseek1_{TAG}.tsv",
-        fs2  = f"{SMKDIR}/gscore_foldseek2_{TAG}.tsv",
-        pred = f"{SMKDIR}/gscore_foldseek2_{TAG}_pred_mprost12B.tsv",
-        qdb  = f"{SMKDIR}/qDB_{TAG}",
+        fs1      = f"{SMKDIR}/gscore_foldseek1_{TAG}.tsv",
+        fs1_pred = f"{SMKDIR}/gscore_foldseek1_{TAG}_pred_prostt5.tsv",
+        fs2      = f"{SMKDIR}/gscore_foldseek2_{TAG}.tsv",
+        fs2_pred = f"{SMKDIR}/gscore_foldseek2_{TAG}_pred_mprost12B.tsv",
+        mmseqs   = f"{SMKDIR}/gscore_mmseqs_{TAG}.tsv",
+        qdb      = f"{SMKDIR}/qDB_{TAG}",
     output: f"{SMKDIR}/plot_gscore_firsthit_{TAG}.png"
     shell:
         "python scripts/plot_gscore_firsthit.py "
         "--queries {input.qdb}.lookup {output} "
-        "{input.fs1} {input.fs2} {input.pred}"
+        "{input.fs1} {input.fs1_pred} {input.fs2} {input.fs2_pred} {input.mmseqs}"
 
 rule print_evalue_firsthit:
     input:
-        fs1  = f"{SMKDIR}/evalue_foldseek1_{TAG}.tsv",
-        fs2  = f"{SMKDIR}/evalue_foldseek2_{TAG}.tsv",
-        pred = f"{SMKDIR}/evalue_foldseek2_{TAG}_pred_mprost12B.tsv",
-        qdb  = f"{SMKDIR}/qDB_{TAG}",
+        fs1      = f"{SMKDIR}/evalue_foldseek1_{TAG}.tsv",
+        fs1_pred = f"{SMKDIR}/evalue_foldseek1_{TAG}_pred_prostt5.tsv",
+        fs2      = f"{SMKDIR}/evalue_foldseek2_{TAG}.tsv",
+        fs2_pred = f"{SMKDIR}/evalue_foldseek2_{TAG}_pred_mprost12B.tsv",
+        mmseqs   = f"{SMKDIR}/evalue_mmseqs_{TAG}.tsv",
+        qdb      = f"{SMKDIR}/qDB_{TAG}",
     output: f"{SMKDIR}/evalue_firsthit_fractions_{TAG}.txt"
     shell:
         r"""
         N=$(wc -l < {input.qdb}.lookup)
-        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs1} >  {output}
-        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs2} >> {output}
-        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.pred} >> {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs1}      >  {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs1_pred} >> {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs2}      >> {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs2_pred} >> {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.mmseqs}   >> {output}
         cat {output}
         """
