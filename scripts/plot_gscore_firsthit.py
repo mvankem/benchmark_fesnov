@@ -21,7 +21,7 @@ def first_hit_gscores(path: str) -> dict[str, float]:
         for line in fh:
             parts = line.rstrip("\n").split("\t")
             if len(parts) <= GSCORE_COL:
-                continue
+                continue  # would be better to fail here
             q = parts[0]
             if q in out:
                 continue

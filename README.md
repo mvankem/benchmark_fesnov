@@ -41,3 +41,10 @@ sbatch -p soeding run.sbatch --config sub=2
 (--mask-bfactor-threshold 50) we drive gscore via foldseek, we could
 emit the per-hit pdbs via --format-output and compute gscore ourselves
 from CA coords + the alignment. -->
+
+Create prostt5 query db:
+glogin-gpu.hpc.gwdg.de
+~/foldseek/bin/foldseek createdb ~/fesnov_seqs_2000.fasta prostt5/db --gpu 1 --prostt5-model ~/prostt5_weights/prostt5-f16.gguf
+
+Limitations:
+Gscores and Evalues are calculated based on a Foldseek2 alignment (not the alignment from the search). This is needed to measure only the ranking and not the alignment quality. A possible problem is when the two alignments find a different domain an a multi-domain target.
