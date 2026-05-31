@@ -70,6 +70,28 @@ rule search_foldseek1:
         rm -rf {{output}}_tmp
         """
 
+# tmp: replicates the paper's effective max-seqs by shrinking 8x (their default
+# 1000 against a 4x larger AFDB-UniProt vs our 2000 against AFDB50 == 8x denser).
+rule search_foldseek1top250:
+    input:
+        qdb = f"{SMKDIR}/qDB_{TAG}",
+        tdb = AFDB50,
+    output: f"{SMKDIR}/search_foldseek1top250_{TAG}.tsv"
+    threads: 32
+    shell:
+        f"""
+        mkdir -p {{output}}_tmp
+        {FOLDSEEK} prefilter {{input.qdb}}_ss {{input.tdb}}_ss {{output}}_tmp/prefDB \
+            -s 9.5 -k 6 --max-seqs 250 --comp-bias-corr 1 --comp-bias-corr-scale 0.15 \
+            --mask-lower-case 0 --aux-score 0 --threads {{threads}}
+        {FOLDSEEK} structurealign {{input.qdb}} {{input.tdb}} {{output}}_tmp/prefDB {{output}}_tmp/alnDB \
+            -e 10000 --sort-by-structure-bits 0 --ss-12st 0 -a --threads {{threads}}
+        {FOLDSEEK} convertalis {{input.qdb}} {{input.tdb}} {{output}}_tmp/alnDB {{output}}_tmp/full.tsv \
+            --format-output 'query,target' --threads {{threads}}
+        awk -F'\\t' '!seen[$1]++' {{output}}_tmp/full.tsv > {{output}}
+        rm -rf {{output}}_tmp
+        """
+
 rule search_foldseek1_pred:
     input:
         pred_qdb = f"{OUTDIR}/pred_db/{{name}}/db",
@@ -127,6 +149,29 @@ rule search_foldseek2_pred:
             --mask-lower-case 0 --aux-score 1 --threads {{threads}}
         {FOLDSEEK} structurealign {{input.pred_qdb}} {{input.tdb}} {{output}}_tmp/prefDB {{output}}_tmp/alnDB \
             -e 10000 --sort-by-structure-bits 0 --ss-12st 1 \
+            --use-reverse-score 0 \
+            --gap-open aa:14,nucl:14 --gap-extend aa:2,nucl:2 \
+            -a --threads {{threads}}
+        {FOLDSEEK} convertalis {{input.pred_qdb}} {{input.tdb}} {{output}}_tmp/alnDB {{output}}_tmp/full.tsv \
+            --format-output 'query,target' --threads {{threads}}
+        awk -F'\\t' '!seen[$1]++' {{output}}_tmp/full.tsv > {{output}}
+        rm -rf {{output}}_tmp
+        """
+
+rule search_foldseek2_pred_structbit1:
+    input:
+        pred_qdb = f"{OUTDIR}/pred_db/{{name}}/db",
+        tdb      = AFDB50,
+    output: f"{SMKDIR}/search_foldseek2_{TAG}_pred_{{name}}_structbit1.tsv"
+    threads: 32
+    shell:
+        f"""
+        mkdir -p {{output}}_tmp
+        {FOLDSEEK} prefilter {{input.pred_qdb}}_ss {{input.tdb}}_ss {{output}}_tmp/prefDB \
+            -s 9.5 -k 6 --max-seqs 2000 --comp-bias-corr 1 --comp-bias-corr-scale 0.15 \
+            --mask-lower-case 0 --aux-score 1 --threads {{threads}}
+        {FOLDSEEK} structurealign {{input.pred_qdb}} {{input.tdb}} {{output}}_tmp/prefDB {{output}}_tmp/alnDB \
+            -e 10000 --sort-by-structure-bits 1 --ss-12st 1 \
             --use-reverse-score 0 \
             --gap-open aa:14,nucl:14 --gap-extend aa:2,nucl:2 \
             -a --threads {{threads}}
@@ -210,13 +255,14 @@ rule plot_gscore_firsthit:
         fs1_pred = f"{SMKDIR}/gscore_foldseek1_{TAG}_pred_prostt5.tsv",
         fs2      = f"{SMKDIR}/gscore_foldseek2_{TAG}.tsv",
         fs2_pred = f"{SMKDIR}/gscore_foldseek2_{TAG}_pred_mprost12B.tsv",
+        fs2_pred_sb1 = f"{SMKDIR}/gscore_foldseek2_{TAG}_pred_mprost1Bvqvae_structbit1.tsv",
         mmseqs   = f"{SMKDIR}/gscore_mmseqs_{TAG}.tsv",
         qdb      = f"{SMKDIR}/qDB_{TAG}",
     output: f"{SMKDIR}/plot_gscore_firsthit_{TAG}.png"
     shell:
         "python scripts/plot_gscore_firsthit.py "
         "--queries {input.qdb}.lookup {output} "
-        "{input.fs1} {input.fs1_pred} {input.fs2} {input.fs2_pred} {input.mmseqs}"
+        "{input.fs1} {input.fs1_pred} {input.fs2} {input.fs2_pred} {input.fs2_pred_sb1} {input.mmseqs}"
 
 rule print_evalue_firsthit:
     input:
@@ -224,16 +270,18 @@ rule print_evalue_firsthit:
         fs1_pred = f"{SMKDIR}/evalue_foldseek1_{TAG}_pred_prostt5.tsv",
         fs2      = f"{SMKDIR}/evalue_foldseek2_{TAG}.tsv",
         fs2_pred = f"{SMKDIR}/evalue_foldseek2_{TAG}_pred_mprost12B.tsv",
+        fs2_pred_sb1 = f"{SMKDIR}/evalue_foldseek2_{TAG}_pred_mprost1Bvqvae_structbit1.tsv",
         mmseqs   = f"{SMKDIR}/evalue_mmseqs_{TAG}.tsv",
         qdb      = f"{SMKDIR}/qDB_{TAG}",
     output: f"{SMKDIR}/evalue_firsthit_fractions_{TAG}.txt"
     shell:
         r"""
         N=$(wc -l < {input.qdb}.lookup)
-        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs1}      >  {output}
-        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs1_pred} >> {output}
-        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs2}      >> {output}
-        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs2_pred} >> {output}
-        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.mmseqs}   >> {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs1}          >  {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs1_pred}     >> {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs2}          >> {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs2_pred}     >> {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.fs2_pred_sb1} >> {output}
+        awk -F'\t' -v n=$N '$3<=1e-3{{c++}} END{{printf "%s\t%d/%d\t%.4f\n", FILENAME, c, n, c/n}}' {input.mmseqs}       >> {output}
         cat {output}
         """
