@@ -26,15 +26,15 @@ Benchmark protein-structure search methods on the FESNov families dataset
    ```
 5. Run the pipeline (search + gscore + plot):
    ```
-   snakemake -c 32 out/smk/plot_gscore_firsthit_sub2000.png
+   snakemake -c 32 out/smk/plot_gscore_firsthit_sub2000_swissprot.png
    ```
 
 ## Notes
 
-snakemake --cores 32 out/smk/search_foldseek1_sub2000.tsv
-awk '!seen[$1]++' out/smk/search_foldseek1_sub2000.tsv | awk '$3 < 0.001' | wc -l
+snakemake --cores 32 out/smk/search_foldseek1_sub2000_swissprot.tsv
+awk '!seen[$1]++' out/smk/search_foldseek1_sub2000_swissprot.tsv | awk '$3 < 0.001' | wc -l
 
-sbatch -p soeding run.sbatch out/smk/plot_gscore_firsthit_sub2000.png
+sbatch -p soeding run.sbatch out/smk/plot_gscore_firsthit_sub2000_swissprot.png
 sbatch -p soeding run.sbatch --config sub=2
 
 <!-- TMP (remove before final): instead of the createdb masking hack
