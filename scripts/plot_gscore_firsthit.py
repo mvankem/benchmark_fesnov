@@ -5,6 +5,7 @@ Queries with no hit are counted as gscore=0 (universe taken from qDB .lookup).
 """
 
 import argparse
+import math
 import os
 
 import matplotlib
@@ -25,7 +26,8 @@ def first_hit_scores(path: str, col: int) -> dict[str, float]:
             q = parts[0]
             if q in out:
                 continue
-            out[q] = float(parts[col])
+            v = float(parts[col])
+            out[q] = 0.0 if math.isnan(v) else v
     return out
 
 
@@ -65,9 +67,9 @@ def main() -> None:
     ax.set_ylabel(args.ylabel)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    ax.legend()
+    ax.legend(fontsize=7)
     fig.tight_layout()
-    fig.savefig(args.output, dpi=150)
+    fig.savefig(args.output, dpi=300)
 
 
 if __name__ == "__main__":
