@@ -192,8 +192,9 @@ rule search_mmseqs:
         """
 
 # Unified gscore step: rebuild a prefDB keyed to qDB_{TAG} numeric IDs from the
-# (qname, tname) tsv, then run structurealign+convertalis with foldseek2 params
-# so gscore is computed the same way for every method.
+# (qname, tname) tsv, then run lolalign+convertalis so gscore is computed the
+# same way for every method. lolalign gives higher-quality alignments than
+# structurealign, raising the gscore distribution.
 rule gscore_tophit:
     input:
         tsv = f"{SMKDIR}/search_{{stem}}_{{db}}.tsv",
@@ -206,10 +207,7 @@ rule gscore_tophit:
         mkdir -p {{output}}_tmp
         python scripts/compare_dbs.py build_prefdb \
             {{input.tsv}} {{input.qdb}} {{input.tdb}} {{output}}_tmp/prefDB
-        {FOLDSEEK} structurealign {{input.qdb}} {{input.tdb}} {{output}}_tmp/prefDB {{output}}_tmp/alnDB \
-            -e 10000 --sort-by-structure-bits 0 --ss-12st 1 \
-            --use-reverse-score 0 \
-            --gap-open aa:14,nucl:14 --gap-extend aa:2,nucl:2 \
+        {FOLDSEEK} lolalign {{input.qdb}} {{input.tdb}} {{output}}_tmp/prefDB {{output}}_tmp/alnDB \
             -a --threads {{threads}}
         {FOLDSEEK} convertalis {{input.qdb}} {{input.tdb}} {{output}}_tmp/alnDB {{output}} \
             --format-output 'query,target,evalue,bits,qstart,tstart,cigar,gscore,alntmscore' \
